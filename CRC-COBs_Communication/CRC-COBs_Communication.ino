@@ -11,17 +11,21 @@ uint8_t receivedData[MAX_SIZE];
 bool newData = false;
 bool valid = false;
 
-int milliCount;
 int currentTime;
 int lastTime = 0;
+int sampleTime = 1000; // in milliseconds
+uint64_t adc_timestamp; // going to read 64 bits but only use 40
 // uint8_t allData[4][4] = {{0x00, 0x11, 0x00, 0x00},{0x11, 0x22, 0x00, 0x33},{0x11, 0x22, 0x33, 0x44},{0x11, 0x00, 0x00, 0x00}};
 // uint8_t data[4]; 
 // int counter = 0;
 
 const int cPotPin = 32; // pin attached to the potentiometer for sample sensor data
 uint32_t potVal = 0; // value read from the potentiometer    
-float outputValue;
-//  dataADC.adc_timestamp = (uint32_t)esp_timer_get_time();
+int timestampBytes = 5; // number of bytes of the timestamp that will be used
+int nData = 4; //bytes
+const int to_encode_length = timestampBytes+nData; // timestamp and data bytes that will be encoded
+uint8_t toBeEncoded[9]; // array that will be hold the timestamp bytes and data bytes that will be encoded
+
 
 // states of the sensor
 enum state {
@@ -51,6 +55,7 @@ void setup() {
   // bit of the previous package
   Serial.write(0x00);
   pinMode(cPotPin, INPUT);
+
   
    
   // delay(2000);
@@ -60,7 +65,7 @@ void loop() {
 
   currentTime = millis();
 
-  currentState = send; // while not communicating with python
+  // currentState = send; // while not communicating with python
     
 
   if (Serial.available() > 0){
@@ -78,23 +83,41 @@ void loop() {
 
         break;
       case send:
-        if (currentTime - lastTime > 1){
-          milliCount += 1;
+        if (currentTime - lastTime > sampleTime){ //get data based on the desired sampling time
+          lastTime = currentTime;
 
-          if (milliCount >= 5){  // collect, package and send the data
-            milliCount = 0;
-            potVal = analogRead(cPotPin);
+            // get the timestamp and sensor value
+            adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
+            potVal = analogRead(cPotPin); // 4 bytes
 
-            int data_length = sizeof(data);
-            // Test that the data can be properly encoded
-            uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
-            int encode_length = encode(data, data_length, encodeCobs);         
-            Serial.write(encode_length); //send the length of the COBs encoded value, does not included crc
-            // send the rest of the encoded data
-            for (int i = 0; i<encode_length; i++){
-              Serial.write(encodeCobs[i]);
+
+            // fill the array to be encoded with the timestamp and data
+            for (int i=0; i<timestampBytes; i++){
+              toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
             }
-          }
+
+            for (int i = timestampBytes; i < to_encode_length; i++){
+              toBeEncoded[i] = (uint8_t)((potVal >> (8*(timestampBytes-1-i))) & 0xFF);
+            }
+
+            for (int i = 0; i < to_encode_length; i++){
+              Serial.print(toBeEncoded[i]);
+              Serial.print(" ");
+            }
+            Serial.println();
+
+            // Encode the data
+            uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
+            int encoded_length = encode(toBeEncoded, to_encode_length, encodeCobs);  
+            // Serial.print("Encoded length: ");       
+            // Serial.println(encoded_length); //send the length of the COBs encoded value, does not included crc
+            // send the rest of the encoded data
+            for (int i = 0; i<encoded_length; i++){
+              Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
+              // Serial.print(encodeCobs[i]);
+              // Serial.print(" ");
+            }
+            // Serial.println();
         }
         break;
     }
