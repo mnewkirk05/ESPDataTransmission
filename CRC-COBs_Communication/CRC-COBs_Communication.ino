@@ -15,9 +15,6 @@ int currentTime;
 int lastTime = 0;
 int sampleTime = 1000; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
-// uint8_t allData[4][4] = {{0x00, 0x11, 0x00, 0x00},{0x11, 0x22, 0x00, 0x33},{0x11, 0x22, 0x33, 0x44},{0x11, 0x00, 0x00, 0x00}};
-// uint8_t data[4]; 
-// int counter = 0;
 
 const int cPotPin = 32; // pin attached to the potentiometer for sample sensor data
 uint32_t potVal = 0; // value read from the potentiometer    
@@ -36,14 +33,6 @@ enum state {
 // start the program with the esp32 in the idle state
 enum state currentState = idle;
 
-// Struct for the ADC Reading
-typedef struct {
-  uint32_t adc_timestamp;
-  uint16_t adc_data;
-} adc_reading;
-
-adc_reading dataADC;
-
 void setup() {
   Serial.begin(115200);
   Serial.println("Ready to start");
@@ -51,14 +40,9 @@ void setup() {
     Serial.read();
   }
 
-  // need to send the first start bit since all other start bits will be the end 
-  // bit of the previous package
+  // need to send the first start bit since all other start bits will be the end bit of the previous package
   Serial.write(0x00);
   pinMode(cPotPin, INPUT);
-
-  
-   
-  // delay(2000);
 }
 
 void loop() {
@@ -66,7 +50,6 @@ void loop() {
   currentTime = millis();
 
   // currentState = send; // while not communicating with python
-    
 
   if (Serial.available() > 0){
     char signal = Serial.read();
@@ -87,37 +70,37 @@ void loop() {
           lastTime = currentTime;
 
             // get the timestamp and sensor value
-            adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
-            potVal = analogRead(cPotPin); // 4 bytes
+          adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
+          potVal = analogRead(cPotPin); // 4 bytes
 
 
-            // fill the array to be encoded with the timestamp and data
-            for (int i=0; i<timestampBytes; i++){
-              toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
-            }
+          // fill the array to be encoded with the timestamp and data
+          for (int i=0; i<timestampBytes; i++){
+            toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
+          }
 
-            for (int i = timestampBytes; i < to_encode_length; i++){
-              toBeEncoded[i] = (uint8_t)((potVal >> (8*(timestampBytes-1-i))) & 0xFF);
-            }
+          for (int i = timestampBytes; i < to_encode_length; i++){
+            toBeEncoded[i] = (uint8_t)((potVal >> (8*(timestampBytes-1-i))) & 0xFF);
+          }
 
-            for (int i = 0; i < to_encode_length; i++){
-              Serial.print(toBeEncoded[i]);
-              Serial.print(" ");
-            }
-            Serial.println();
+          for (int i = 0; i < to_encode_length; i++){
+            Serial.print(toBeEncoded[i]);
+            Serial.print(" ");
+          }
+          Serial.println();
 
-            // Encode the data
-            uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
-            int encoded_length = encode(toBeEncoded, to_encode_length, encodeCobs);  
-            // Serial.print("Encoded length: ");       
-            // Serial.println(encoded_length); //send the length of the COBs encoded value, does not included crc
-            // send the rest of the encoded data
-            for (int i = 0; i<encoded_length; i++){
-              Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
-              // Serial.print(encodeCobs[i]);
-              // Serial.print(" ");
-            }
-            // Serial.println();
+          // Encode the data
+          uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
+          int encoded_length = encode(toBeEncoded, to_encode_length, encodeCobs);  
+          // Serial.print("Encoded length: ");       
+          // Serial.println(encoded_length); //send the length of the COBs encoded value, does not included crc
+          // send the rest of the encoded data
+          for (int i = 0; i<encoded_length; i++){
+            Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
+            // Serial.print(encodeCobs[i]);
+            // Serial.print(" ");
+          }
+          // Serial.println();
         }
         break;
     }
