@@ -9,7 +9,7 @@ import numpy as np
 MAX_N = 300 # large value that should never be reached, but used as a check
 MAX_SIZE = MAX_N + MAX_N//254 + 2
 
-SAMPLING_PERIOD = 5e-3
+SAMPLING_PERIOD = 10e-3
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
 
@@ -23,7 +23,7 @@ data_length = 9 # timestamp bytes + data bytes
 encoded_length = 13 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "0.66V"
+DataFileName = "Voltage divider-2"
 
 
 

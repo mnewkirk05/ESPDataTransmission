@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <Arduino.h>
 
 #define MAX_N 300
 #define MAX_SIZE (MAX_N + MAX_N/254+2)
@@ -13,16 +14,23 @@ bool valid = false;
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 5; // in milliseconds
+int sampleTime = 10; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
-const int cPotPin = 32; // pin attached to the potentiometer for sample sensor data
+const int cPotPin = 25; // pin attached to the potentiometer for sample sensor data
 uint32_t potVal = 0; // value read from the potentiometer    
 int timestampBytes = 5; // number of bytes of the timestamp that will be used
 int nData = 4; //bytes
 const int to_encode_length = timestampBytes+nData; // timestamp and data bytes that will be encoded
 uint8_t toBeEncoded[9]; // array that will be hold the timestamp bytes and data bytes that will be encoded
 
+// initalize a timer 
+hw_timer_t *pTimer = NULL;
+volatile int samplesReady = 0;
+
+void ARDUINO_ISR_ATTR timerISR(){
+  samplesReady++;
+}
 
 // states of the sensor
 enum state {
@@ -40,16 +48,18 @@ void setup() {
     Serial.read();
   }
 
+  // set up timer
+  pTimer = timerBegin(1000000);
+  timerAttachInterrupt(pTimer, &timerISR);
+  timerAlarm(pTimer, (sampleTime*1000), true, 0);
+
   // need to send the first start bit since all other start bits will be the end bit of the previous package
   Serial.write(0x00);
   pinMode(cPotPin, INPUT);
 }
 
 void loop() {
-
-  currentTime = millis();
-
-  // currentState = send; // while not communicating with python
+  // currentState = send; // use if wanting to test the arudino code alone, without python communication
 
   if (Serial.available() > 0){
     char signal = Serial.read();
@@ -57,7 +67,7 @@ void loop() {
     if (signal == 's'){ // when s (start) is sent from python, start sending data
       currentState = send;
     }
-    else{ // go to idle when there is an error and the esp32 needs to stop sending data
+    else{ // go to idle when python wants to end data transmission and the esp32 needs to stop sending data
       currentState = idle;
     }
   }
@@ -66,10 +76,10 @@ void loop() {
 
         break;
       case send:
-        if (currentTime - lastTime > sampleTime){ //get data based on the desired sampling time
-          lastTime = currentTime;
+        if (samplesReady> 0){//get data based on the desired sampling time
+          samplesReady--;
 
-            // get the timestamp and sensor value
+          // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
           potVal = analogRead(cPotPin); // 4 bytes
 
@@ -82,10 +92,6 @@ void loop() {
           for (int i = 0; i < nData; i++){
             toBeEncoded[timestampBytes+i] = (uint8_t)((potVal >> (8*(nData-1-i))) & 0xFF);
           }
-          // toBeEncoded[5] = (potVal >> 24) & 0xFF;
-          // toBeEncoded[6] = (potVal >> 16) & 0xFF;
-          // toBeEncoded[7] = (potVal >> 8)  & 0xFF;
-          // toBeEncoded[8] = (potVal >> 0)  & 0xFF;
 
           // for (int i = 0; i < to_encode_length; i++){
           //   Serial.print(toBeEncoded[i]);
@@ -105,6 +111,7 @@ void loop() {
             // Serial.print(" ");
           }
           // Serial.println();
+
         }
         break;
     }
@@ -136,27 +143,7 @@ int encode(uint8_t data[], int data_length, uint8_t cobs[]){
     return cobsLength; // return length not including the crc values
 }
 
-int decode(uint8_t encoded_data[], int data_length, uint8_t decoded_data[]){
-  // decode the data into the output array, plus the 2 bytes for the crc code
-    
-    int decoded_length = COBs_Decode(encoded_data, data_length, decoded_data); 
-    if (decoded_length < 2){return 0;}// won't be able to do the next line of code if this error is made
-    uint8_t highCRCrec = decoded_data[decoded_length-2];
-    uint8_t lowCRCrec = decoded_data[decoded_length-1];
 
-    uint16_t actualCRC = ((uint16_t)highCRCrec << 8) | lowCRCrec;
-    uint16_t sentCRC = crc(decoded_data, decoded_length-2); // find the crc with a length not including the initial crc
-
-
-    valid = false;
-    if (actualCRC == sentCRC){
-      valid = true;
-    }
-    Serial.print("Valid = ");
-    Serial.println(valid);
-    
-    return decoded_length;
-}
 
 // more efficient algorithm of obtaining the crc value
 uint16_t crc (uint8_t data[], int length){ //data is an array of bytes
@@ -210,32 +197,3 @@ int COBs (uint8_t data[], int n, uint8_t cobs[]){
     return cobs_index; // want to know the length after encoding
 }
 
-
-int COBs_Decode(uint8_t cobs[], int length, uint8_t output[]){
-    int cobs_index = 0;
-    int output_index = 0;
-
-    while (cobs_index < length){
-
-        uint8_t code = cobs[cobs_index];
-
-        if (code == 0x00){break;} //reached the delimiter, exit the loop
-
-        cobs_index++; // only increase once sure that the end of the array has not be reached
-        
-
-        // copy over the cob values for this data block
-        for (int i = 1; i < code; i++){
-            output[output_index++] = cobs[cobs_index++];
-        }
-
-        // check if a zero needs to be put back into the output array
-        // if the code value is 0xff, it means this byte is an added OHB so there should be no zero added to the new array
-        // also ensure that the cobs_index is not pointing at the end of the array, as the delimited should not be copied over
-        // also make sure we are not at the delimiter
-        if (code != 0xFF && cobs_index<length && cobs[cobs_index]!=0){
-            output[output_index++] = 0x00;
-        }        
-    }
-    return output_index;
-}
