@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <Arduino.h>
+#include "driver/gptimer.h"
 
 #define MAX_N 300
 #define MAX_SIZE (MAX_N + MAX_N/254+2)
@@ -25,11 +26,43 @@ const int to_encode_length = timestampBytes+nData; // timestamp and data bytes t
 uint8_t toBeEncoded[9]; // array that will be hold the timestamp bytes and data bytes that will be encoded
 
 // initalize a timer 
-hw_timer_t *pTimer = NULL;
-volatile int samplesReady = 0;
+gptimer_handle_t gptimer = NULL;
+volatile int samplesReady = 0; //tells program to take a sample of data and send it
 
-void ARDUINO_ISR_ATTR timerISR(){
+bool IRAM_ATTR gptimer_callback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data){
   samplesReady++;
+  return true;
+}
+
+// set up and start timer with a specified interval
+void hardware_timer_setup(uint time_in_us){
+  
+
+  // step 1: create and configure timer
+  gptimer_config_t timer_config = {
+    .clk_src = GPTIMER_CLK_SRC_DEFAULT,  // APB clock (80MHz)
+    .direction = GPTIMER_COUNT_UP,   // count up
+    .resolution_hz = 1000000,    // 1MHz resolution (1 us per tick)
+  };
+
+  ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &gptimer));
+
+  // step 2: register an interrupt 
+  gptimer_event_callbacks_t cbs = {.on_alarm = gptimer_callback,};
+  ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, NULL));
+
+  // step 3: configure alarm interval
+  gptimer_alarm_config_t alarm_config = {
+    .alarm_count = time_in_us, // alarm after the desired time period
+    .reload_count = 0, // starts counting from zero
+    };
+
+  alarm_config.flags.auto_reload_on_alarm = true;
+  ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config));
+
+  // step 4: enable and start the timer
+  ESP_ERROR_CHECK(gptimer_enable(gptimer));
+  ESP_ERROR_CHECK(gptimer_start(gptimer));
 }
 
 // states of the sensor
@@ -49,9 +82,7 @@ void setup() {
   }
 
   // set up timer
-  pTimer = timerBegin(1000000);
-  timerAttachInterrupt(pTimer, &timerISR);
-  timerAlarm(pTimer, (sampleTime*1000), true, 0);
+  hardware_timer_setup(sampleTime*1000); //sample time initially entered in ms
 
   // need to send the first start bit since all other start bits will be the end bit of the previous package
   Serial.write(0x00);
