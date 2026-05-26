@@ -13,7 +13,7 @@ bool valid = false;
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 1000; // in milliseconds
+int sampleTime = 5; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int cPotPin = 32; // pin attached to the potentiometer for sample sensor data
@@ -79,15 +79,19 @@ void loop() {
             toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
           }
 
-          for (int i = timestampBytes; i < to_encode_length; i++){
-            toBeEncoded[i] = (uint8_t)((potVal >> (8*(timestampBytes-1-i))) & 0xFF);
+          for (int i = 0; i < nData; i++){
+            toBeEncoded[timestampBytes+i] = (uint8_t)((potVal >> (8*(nData-1-i))) & 0xFF);
           }
+          // toBeEncoded[5] = (potVal >> 24) & 0xFF;
+          // toBeEncoded[6] = (potVal >> 16) & 0xFF;
+          // toBeEncoded[7] = (potVal >> 8)  & 0xFF;
+          // toBeEncoded[8] = (potVal >> 0)  & 0xFF;
 
-          for (int i = 0; i < to_encode_length; i++){
-            Serial.print(toBeEncoded[i]);
-            Serial.print(" ");
-          }
-          Serial.println();
+          // for (int i = 0; i < to_encode_length; i++){
+          //   Serial.print(toBeEncoded[i]);
+          //   Serial.print(" ");
+          // }
+          // Serial.println();
 
           // Encode the data
           uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
@@ -135,7 +139,7 @@ int encode(uint8_t data[], int data_length, uint8_t cobs[]){
 int decode(uint8_t encoded_data[], int data_length, uint8_t decoded_data[]){
   // decode the data into the output array, plus the 2 bytes for the crc code
     
-    int decoded_length = COBs_Decode(encoded_data, MAX_SIZE, decoded_data); 
+    int decoded_length = COBs_Decode(encoded_data, data_length, decoded_data); 
     if (decoded_length < 2){return 0;}// won't be able to do the next line of code if this error is made
     uint8_t highCRCrec = decoded_data[decoded_length-2];
     uint8_t lowCRCrec = decoded_data[decoded_length-1];
