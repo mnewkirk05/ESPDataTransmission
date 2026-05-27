@@ -12,6 +12,8 @@ MAX_SIZE = MAX_N + MAX_N//254 + 2
 SAMPLING_PERIOD = 10e-3
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
+# ESP32 variables:
+CAPDAC = 7
 
 # Serial port variables:
 port = "COM6"
@@ -19,8 +21,8 @@ baudRate_serial = 115200  # Measure of data speed
 timeout_serial = 2  # in seconds  # Number of seconds to wait for serial data
 
 # Sensor dependent variables
-data_length = 9 # timestamp bytes + data bytes
-encoded_length = 13 # data_length + OHB + CRC + end marker
+data_length = 13 # timestamp bytes + adc bytes + cap sensing bytes
+encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
 DataFileName = "Voltage divider-2"
@@ -223,10 +225,16 @@ if __name__ == "__main__":
             timestamp = int.from_bytes(payload[0:5],'big') #convert the time bytes
             esp32_timestamp_bytes.append(timestamp)
 
-            #convert the sensor data bytes
-            sensor_data_raw = int.from_bytes(payload[5:9], 'big') #the sensor data will be after the 5 timestamp bytes and up to the decoded data length (not including crc)
+            #convert the adc data bytes
+            sensor_data_raw = int.from_bytes(payload[5:9], 'big') #the sensor data will be the 4 bytes after the 5 timestamp bytes 
             sensor_data = (sensor_data_raw*3.3)/(2**sensor_resolution)
             decoded_data.append(sensor_data)
+
+            #covert the capcitive data bytes
+            # Formula from FDC1004 datasheet (page 16), using little-endian byte order as that is the format from the ESP32
+            capData_raw = int.from_bytes(payload[9:13], 'big') #the capacitive sensor data will be the 4 bytes after the adc data
+            capData = (capData_raw / 524288.0) + (CAPDAC * 3.125)
+
 
     # Convert the time given from arudino to times starting at zero
     esp32_timestamp = [x - esp32_timestamp_bytes[0] for x in esp32_timestamp_bytes]
@@ -249,6 +257,7 @@ if __name__ == "__main__":
         "A": "Sample No.",
         "B": "Timestamp (us)",
         "C": "Sensor Voltage from Potentiometer (V)",
+        "D": "Capacitive Sensor Reading (pF)"
     }
 
     # Data to be included at the top of the CSV file
@@ -261,7 +270,8 @@ if __name__ == "__main__":
     dataBody = {
         "A": sample_number,
         "B": esp32_timestamp,
-        "C": decoded_data
+        "C": decoded_data,
+        "D": capData
     }
 
     # Build the full header section with metadata

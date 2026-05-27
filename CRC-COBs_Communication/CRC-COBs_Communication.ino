@@ -1,8 +1,12 @@
+// CAPACITIVE SENSING CODE IS FROM MEMO
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <Arduino.h>
 #include "driver/gptimer.h"
+#include <Wire.h>
+#include "FDC1004.h"
 
 #define MAX_N 300
 #define MAX_SIZE (MAX_N + MAX_N/254+2)
@@ -19,11 +23,22 @@ int sampleTime = 10; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int cPotPin = 25; // pin attached to the potentiometer for sample sensor data
-uint32_t potVal = 0; // value read from the potentiometer    
+uint32_t adcVal = 0; // value read from the potentiometer    
 int timestampBytes = 5; // number of bytes of the timestamp that will be used
-int nData = 4; //bytes
-const int to_encode_length = timestampBytes+nData; // timestamp and data bytes that will be encoded
-uint8_t toBeEncoded[9]; // array that will be hold the timestamp bytes and data bytes that will be encoded
+int nADC = 4; //bytes 
+int nCap = 4; //bytes
+const int to_encode_length = timestampBytes+nADC; // timestamp and data bytes that will be encoded
+uint8_t toBeEncoded[13]; // array that will be hold the timestamp bytes and data bytes that will be encoded
+
+//settings to configure capcitor measurement channel
+uint8_t measurement = 1;    //must be 1,2,3,or 4
+uint8_t sensor = 1;         //must be 1,2,3,or 4
+uint8_t rate = 1;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
+
+// -----------------------------------------------------------------------------------------------------------
+// Object to access library functions
+// -----------------------------------------------------------------------------------------------------------
+FDC1004 myFDC1004;
 
 // initalize a timer 
 gptimer_handle_t gptimer = NULL;
@@ -112,16 +127,21 @@ void loop() {
 
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
-          potVal = analogRead(cPotPin); // 4 bytes
-
+          adcVal = analogRead(cPotPin); // 4 bytes
+          cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
 
           // fill the array to be encoded with the timestamp and data
           for (int i=0; i<timestampBytes; i++){
             toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
           }
 
-          for (int i = 0; i < nData; i++){
-            toBeEncoded[timestampBytes+i] = (uint8_t)((potVal >> (8*(nData-1-i))) & 0xFF);
+          for (int i = 0; i < nADC; i++){
+            toBeEncoded[timestampBytes+i] = (uint8_t)((adcVal >> (8*(nADC-1-i))) & 0xFF);
+          }
+
+          // fill the rest of the array with the capcitive sensing data
+          for (int i = 0; i < nCap; i++){
+            toBeEncoded[timestampBytes+nADC+i] = (uint8_t)((cap_sens_data >> (8*(nCap-1-i))) & 0xFF);
           }
 
           // for (int i = 0; i < to_encode_length; i++){
