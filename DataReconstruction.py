@@ -9,11 +9,15 @@ import numpy as np
 MAX_N = 300 # large value that should never be reached, but used as a check
 MAX_SIZE = MAX_N + MAX_N//254 + 2
 
-SAMPLING_PERIOD = 10e-3
+SAMPLING_PERIOD = 20e-3
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
 # ESP32 variables:
 CAPDAC = 7
+
+
+# Ensure CAPDAC value is within the valid range [0, 31]
+CAPDAC = max(0, min(31, CAPDAC)) 
 
 # Serial port variables:
 port = "COM6"
@@ -25,7 +29,7 @@ data_length = 13 # timestamp bytes + adc bytes + cap sensing bytes
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "Voltage divider-2"
+DataFileName = "Test with both sensors, voltage changing"
 
 
 
@@ -83,7 +87,7 @@ def decode(encoded_data, data_length, decoded_data):
     
     decoded_length = COBs_Decode(encoded_data, data_length, decoded_data)
     if (decoded_length < 2):
-        return 0 #// won't be able to do the next line of code if this error is made
+        return 0,0 #// won't be able to do the next line of code if this error is made
     highCRCrec = decoded_data[decoded_length-2]
     lowCRCrec = decoded_data[decoded_length-1]
 
@@ -92,7 +96,7 @@ def decode(encoded_data, data_length, decoded_data):
     sentCRC = sentCRC & 0xFFFF # make sure that any overflow is discarded
 
     # print(f"actual = {actualCRC:02X} sent = {sentCRC:02X}")
-    valid = 0
+    valid = 0    
     if (actualCRC == sentCRC):
       valid = 1
         
@@ -166,6 +170,7 @@ if __name__ == "__main__":
     crctable16 = [0] * 256 # going to have all possible combinations for input byte values from 0-255
     decoded_data = [] #2D array that will hold the decoded data packets
     esp32_timestamp_bytes = []
+    capData_list = []
 
     running = 0 #boolean variable that turns to 1 if the first start 0 byte is read
 
@@ -216,11 +221,14 @@ if __name__ == "__main__":
         decodeData = bytearray(MAX_SIZE) # re-initalize each time
 
         decode_length, valid = decode(packet,len(packet), decodeData) #pass in encoded_length as the length to be decoded and the function should return the original data length + 2 (includes crc)
-        decode_length -= 2 #don't include the 2 crc bytes in the comparison of data length bytes
         # data was corrupt if the crc values do not match, or the decoded length is not equal to the data length sent
-        if (not valid) or (decode_length!=data_length): 
+        if (not valid) or (decode_length!=(data_length+2)): # need to account for the crc value that has not yet been removed 
             decoded_data.append(np.nan) 
+            esp32_timestamp_bytes.append(np.nan)
+            capData_list.append(np.nan)
+
         else: # if the data is valid, prepare it to be written to the csv file (not including crc)
+            decode_length -= 2 #don't include the 2 crc bytes in the comparison of data length bytes
             payload = decodeData[:decode_length]
             timestamp = int.from_bytes(payload[0:5],'big') #convert the time bytes
             esp32_timestamp_bytes.append(timestamp)
@@ -231,9 +239,10 @@ if __name__ == "__main__":
             decoded_data.append(sensor_data)
 
             #covert the capcitive data bytes
-            # Formula from FDC1004 datasheet (page 16), using little-endian byte order as that is the format from the ESP32
-            capData_raw = int.from_bytes(payload[9:13], 'big') #the capacitive sensor data will be the 4 bytes after the adc data
+            # Formula from FDC1004 datasheet (page 17), using little-endian byte order as that is the format from the ESP32
+            capData_raw = int.from_bytes(payload[9:13], 'big', signed=True) #the capacitive sensor data will be the 4 bytes after the adc data
             capData = (capData_raw / 524288.0) + (CAPDAC * 3.125)
+            capData_list.append(capData)
 
 
     # Convert the time given from arudino to times starting at zero
@@ -271,7 +280,7 @@ if __name__ == "__main__":
         "A": sample_number,
         "B": esp32_timestamp,
         "C": decoded_data,
-        "D": capData
+        "D": capData_list
     }
 
     # Build the full header section with metadata

@@ -14,12 +14,12 @@
 int receivedLength = 0; 
 uint8_t receivedData[MAX_SIZE];
 
-bool newData = false;
-bool valid = false;
+// bool newData = false;
+// bool valid = false;
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 10; // in milliseconds
+int sampleTime = 20; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int cPotPin = 25; // pin attached to the potentiometer for sample sensor data
@@ -27,13 +27,15 @@ uint32_t adcVal = 0; // value read from the potentiometer
 int timestampBytes = 5; // number of bytes of the timestamp that will be used
 int nADC = 4; //bytes 
 int nCap = 4; //bytes
-const int to_encode_length = timestampBytes+nADC; // timestamp and data bytes that will be encoded
+const int to_encode_length = timestampBytes+nADC+nCap; // timestamp and data bytes that will be encoded
 uint8_t toBeEncoded[13]; // array that will be hold the timestamp bytes and data bytes that will be encoded
 
 //settings to configure capcitor measurement channel
 uint8_t measurement = 1;    //must be 1,2,3,or 4
 uint8_t sensor = 1;         //must be 1,2,3,or 4
 uint8_t rate = 1;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
+int32_t cap_sens_data;
+volatile int capdac = 7;
 
 // -----------------------------------------------------------------------------------------------------------
 // Object to access library functions
@@ -102,6 +104,11 @@ void setup() {
   // need to send the first start bit since all other start bits will be the end bit of the previous package
   Serial.write(0x00);
   pinMode(cPotPin, INPUT);
+
+  Wire.begin();
+  myFDC1004.setupSingleMeasurement(measurement, sensor, capdac);
+  
+
 }
 
 void loop() {
@@ -123,12 +130,13 @@ void loop() {
         break;
       case send:
         if (samplesReady> 0){//get data based on the desired sampling time
-          samplesReady--;
+          samplesReady=0;
 
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
           adcVal = analogRead(cPotPin); // 4 bytes
           cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
+          // Serial.println(cap_sens_data);
 
           // fill the array to be encoded with the timestamp and data
           for (int i=0; i<timestampBytes; i++){
