@@ -14,12 +14,9 @@
 int receivedLength = 0; 
 uint8_t receivedData[MAX_SIZE];
 
-// bool newData = false;
-// bool valid = false;
-
 int currentTime;
 int lastTime = 0;
-int sampleTime = 20; // in milliseconds
+int sampleTime = 10; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int cPotPin = 25; // pin attached to the potentiometer for sample sensor data
@@ -28,12 +25,12 @@ int timestampBytes = 5; // number of bytes of the timestamp that will be used
 int nADC = 4; //bytes 
 int nCap = 4; //bytes
 const int to_encode_length = timestampBytes+nADC+nCap; // timestamp and data bytes that will be encoded
-uint8_t toBeEncoded[13]; // array that will be hold the timestamp bytes and data bytes that will be encoded
+uint8_t toBeEncoded[13]; // **Need to manually input length** array that will be hold the timestamp bytes and data bytes that will be encoded
 
 //settings to configure capcitor measurement channel
 uint8_t measurement = 1;    //must be 1,2,3,or 4
 uint8_t sensor = 1;         //must be 1,2,3,or 4
-uint8_t rate = 1;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
+uint8_t rate = 2;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
 int32_t cap_sens_data;
 volatile int capdac = 7;
 
@@ -94,7 +91,7 @@ enum state currentState = idle;
 void setup() {
   Serial.begin(115200);
   Serial.println("Ready to start");
-  while (Serial.available() > 0) {
+  while (Serial.available() > 0) { //clear buffer
     Serial.read();
   }
 
@@ -125,33 +122,34 @@ void loop() {
     }
   }
   switch(currentState){
-      case idle:
-
+      case idle: // wait in this state until python send the command to start collecting data
         break;
+
       case send:
         if (samplesReady> 0){//get data based on the desired sampling time
-          samplesReady=0;
+          samplesReady=0; // set back to zero, ***might end up skipping data if samplesReady > 1, but should received data at the appropriate time for the next sample
 
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
           adcVal = analogRead(cPotPin); // 4 bytes
           cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
-          // Serial.println(cap_sens_data);
 
-          // fill the array to be encoded with the timestamp and data
+          // fill the array to be encoded with the timestamp and data --> need to shift the information to the appropriate position in the array
           for (int i=0; i<timestampBytes; i++){
-            toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); // shift the timestamp to each position in the array
+            toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); 
           }
 
+          // fill the array starting at where the timestamp byte ends
           for (int i = 0; i < nADC; i++){
             toBeEncoded[timestampBytes+i] = (uint8_t)((adcVal >> (8*(nADC-1-i))) & 0xFF);
           }
 
-          // fill the rest of the array with the capcitive sensing data
+          // fill the rest of the array with the capcitive sensing data, starting where the ADC data ends
           for (int i = 0; i < nCap; i++){
             toBeEncoded[timestampBytes+nADC+i] = (uint8_t)((cap_sens_data >> (8*(nCap-1-i))) & 0xFF);
           }
 
+          // TEST TO SEE WHAT WILL BE ENCODED
           // for (int i = 0; i < to_encode_length; i++){
           //   Serial.print(toBeEncoded[i]);
           //   Serial.print(" ");
@@ -160,17 +158,12 @@ void loop() {
 
           // Encode the data
           uint8_t encodeCobs[MAX_SIZE]; // initialize an array for the encoded data
-          int encoded_length = encode(toBeEncoded, to_encode_length, encodeCobs);  
-          // Serial.print("Encoded length: ");       
-          // Serial.println(encoded_length); //send the length of the COBs encoded value, does not included crc
+          int encoded_length = encode(toBeEncoded, to_encode_length, encodeCobs);  // length of the COBs encoded value, does not included crc
+          
           // send the rest of the encoded data
           for (int i = 0; i<encoded_length; i++){
             Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
-            // Serial.print(encodeCobs[i]);
-            // Serial.print(" ");
           }
-          // Serial.println();
-
         }
         break;
     }
@@ -219,6 +212,7 @@ uint16_t crc (uint8_t data[], int length){ //data is an array of bytes
 
   return crc;
 }
+
 //pass in the array that will be filled with the cobs encoding
 int COBs (uint8_t data[], int n, uint8_t cobs[]){
 
@@ -249,10 +243,8 @@ int COBs (uint8_t data[], int n, uint8_t cobs[]){
             }
         }
     }
-
     // add the distance to the delimiter
     cobs[distance_index] = distance;
     cobs[cobs_index++] = 0x00; // delimiter
     return cobs_index; // want to know the length after encoding
 }
-

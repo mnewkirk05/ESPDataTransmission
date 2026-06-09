@@ -9,13 +9,11 @@ import numpy as np
 MAX_N = 300 # large value that should never be reached, but used as a check
 MAX_SIZE = MAX_N + MAX_N//254 + 2
 
-SAMPLING_PERIOD = 20e-3
+SAMPLING_PERIOD = 10e-3 #for a sampling period of 10ms, need to use rate 2 on the FDC1004 for a frequency of 200Hz
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
 # ESP32 variables:
 CAPDAC = 7
-
-
 # Ensure CAPDAC value is within the valid range [0, 31]
 CAPDAC = max(0, min(31, CAPDAC)) 
 
@@ -29,7 +27,7 @@ data_length = 13 # timestamp bytes + adc bytes + cap sensing bytes
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "Test with both sensors, voltage changing"
+DataFileName = "Sampling Period Tests"
 
 
 
@@ -201,7 +199,6 @@ if __name__ == "__main__":
             serialPort.write(b's') 
             buf = bytearray() 
             print("Beginning data collection...")
-
 
 
     # collect data as long as a keyboard interrupt does not occur
