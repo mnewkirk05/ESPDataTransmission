@@ -95,7 +95,8 @@ class FDC1004 {
 
     
     // Added by Jose Guillermo Colli Alfaro on 2025-07-30
-    int32_t getRawCapacitance(uint8_t measurement, uint8_t rate);
+    //int32_t getRawCapacitance(uint8_t measurement, uint8_t rate);
+    uint32_t getRawCapacitance(uint8_t measurement, uint8_t rate);
 
     //offset calibration
     //gain calibration 

@@ -9,6 +9,7 @@ build/
 venv/
 .venv/
 .env
+myenv/
 
 # logs
 *.log

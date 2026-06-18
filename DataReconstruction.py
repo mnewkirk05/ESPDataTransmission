@@ -13,7 +13,7 @@ SAMPLING_PERIOD = 10e-3 #for a sampling period of 10ms, need to use rate 2 on th
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
 # ESP32 variables:
-CAPDAC = 7
+CAPDAC = 9.5
 # Ensure CAPDAC value is within the valid range [0, 31]
 CAPDAC = max(0, min(31, CAPDAC)) 
 
@@ -27,7 +27,7 @@ data_length = 13 # timestamp bytes + adc bytes + cap sensing bytes
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "Sampling Period Tests"
+DataFileName = "power test4"
 
 
 
@@ -236,7 +236,7 @@ if __name__ == "__main__":
             decoded_data.append(sensor_data)
 
             #covert the capcitive data bytes
-            # Formula from FDC1004 datasheet (page 17), using little-endian byte order as that is the format from the ESP32
+            # Formula from FDC1004 datasheet (page 17), using big-endian byte order as that is the format from the ESP32
             capData_raw = int.from_bytes(payload[9:13], 'big', signed=True) #the capacitive sensor data will be the 4 bytes after the adc data
             capData = (capData_raw / 524288.0) + (CAPDAC * 3.125)
             capData_list.append(capData)

@@ -200,7 +200,8 @@ float FDC1004::getCapacitance(uint8_t measurement, uint8_t rate)
 }
 
 // Added by Jose Guillermo Colli Alfaro on 2025-07-30
-int32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
+// int32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
+uint32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
 {
   int32_t data;
   uint32_t rawdata = getRawData(measurement, rate);
@@ -217,7 +218,8 @@ int32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
     data = (int32_t)rawdata;
   }
 
-  return data;
+  // return data;
+  return rawdata;
 }
 
 uint8_t FDC1004::startRepeatMeasurement(uint8_t measurements, uint8_t rate)

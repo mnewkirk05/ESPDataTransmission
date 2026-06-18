@@ -32,7 +32,7 @@ uint8_t measurement = 1;    //must be 1,2,3,or 4
 uint8_t sensor = 1;         //must be 1,2,3,or 4
 uint8_t rate = 2;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
 int32_t cap_sens_data;
-volatile int capdac = 7;
+volatile int capdac = 9.5;
 
 // -----------------------------------------------------------------------------------------------------------
 // Object to access library functions
@@ -132,7 +132,10 @@ void loop() {
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
           adcVal = analogRead(cPotPin); // 4 bytes
+          // cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
           cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
+          // Serial.println(cap_sens_data);
+          // delay(1000);
 
           // fill the array to be encoded with the timestamp and data --> need to shift the information to the appropriate position in the array
           for (int i=0; i<timestampBytes; i++){
