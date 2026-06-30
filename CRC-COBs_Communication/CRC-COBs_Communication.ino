@@ -18,7 +18,7 @@ uint8_t receivedData[MAX_SIZE];
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 12; // in milliseconds
+int sampleTime = 10; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int adcReset = 2; // adc reset pin on the esp
@@ -33,9 +33,11 @@ bool ready = false;
 //settings to configure capcitor measurement channel
 uint8_t rate = 3;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
 volatile int capdac = 9.5;
-uint8_t measurements[NUM_SENSORS] = {1,2,3};
-uint8_t sensors[NUM_SENSORS] = {1,2,3};
-uint8_t capdacs[NUM_SENSORS] = {capdac,capdac,capdac};
+uint8_t measurement = 1;
+uint8_t sensor = 1;
+// uint8_t measurements[NUM_SENSORS] = {1,2,3};
+// uint8_t sensors[NUM_SENSORS] = {1,2,3};
+// uint8_t capdacs[NUM_SENSORS] = {capdac,capdac,capdac};
 
 uint8_t measurements_flag = 0b1110; //set bit for each of the sensors [1][2][3][4]
 
@@ -50,11 +52,11 @@ ADS8688 bank = ADS8688(1);               // Instantiate ADS8688 with PIN 1 as de
 
 // initalize a timer 
 gptimer_handle_t gptimer = NULL;
-volatile int samplesReady = 0; //tells program to take a sample of data and send it
+volatile bool samplesReady = false; //tells program to take a sample of data and send it
 
 bool IRAM_ATTR gptimer_callback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data){
-  samplesReady = 1;
-  return true;
+  samplesReady = true;
+  return false;
 }
 
 // set up and start timer with a specified interval
@@ -107,14 +109,16 @@ void setup() {
 
   Wire.begin();
   
-  //set up all four sensors for single measurement mode
-  for(int i=0; i < NUM_SENSORS; i++)
-  {
-    myFDC1004.setupSingleMeasurement(measurements[i], sensors[i], capdacs[i]);
+  // //set up all four sensors for single measurement mode
+  // for(int i=0; i < NUM_SENSORS; i++)
+  // {
+  //   myFDC1004.setupSingleMeasurement(measurements[i], sensors[i], capdacs[i]);
     
-  }
-  //start repeatedly measured all four measuremens at given rate
-  myFDC1004.startRepeatMeasurement(measurements_flag, rate);
+  // }
+  // //start repeatedly measured all four measuremens at given rate
+  // myFDC1004.startRepeatMeasurement(measurements_flag, rate);
+
+  myFDC1004.setupSingleMeasurement(measurement, sensor, capdac);
   
   // set up adc
   bank.setChannelSPD(0b00000001);       // set the channels to be read from 1 = read, 0 = power down
@@ -137,8 +141,8 @@ void setup() {
 
 
 void loop() {
-  // currentState = send; // use if wanting to test the arudino code alone, without python communication
-
+  currentState = debug; // use if wanting to test the arudino code alone, without python communication
+  
   if (Serial.available() > 0){
     char signal = Serial.read();
 
@@ -160,8 +164,8 @@ void loop() {
         break;
 
       case send:
-        if (samplesReady> 0){//get data based on the desired sampling time
-          samplesReady = 0; // set back to zero, ***might end up skipping data if samplesReady > 1, but should received data at the appropriate time for the next sample
+        if (samplesReady){//get data based on the desired sampling time
+           // set back to zero, ***might end up skipping data if samplesReady > 1, but should received data at the appropriate time for the next sample
           
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
@@ -169,9 +173,10 @@ void loop() {
           adcVal = bank.noOp(); // 2 bytes
 
           // store the repeat data
-          myFDC1004.getRepeatRawData(measurements_flag, capacitance);
+          // myFDC1004.getRepeatRawData(measurements_flag, capacitance);
           //make into a loop when reading from more channels
-          capToSend = capacitance[0]; 
+          // capToSend = capacitance[0]; 
+          capToSend = myFDC1004.getRawCapacitance(measurement, rate);
 
           // fill the array to be encoded with the timestamp and data --> need to shift the information to the appropriate position in the array
           for (int i=0; i<timestampBytes; i++){
@@ -203,13 +208,16 @@ void loop() {
           for (int i = 0; i<encoded_length; i++){
             Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
           }
-
+          // Serial.println(adc_timestamp);
+          samplesReady = false;
         }
         break;
       case debug:
-        if (samplesReady> 0){//get data based on the desired sampling time
-          samplesReady=0;
+      ESP_ERROR_CHECK(gptimer_start(gptimer));
+        if (samplesReady){//get data based on the desired sampling time
+          samplesReady=false;
           adcVal = bank.noOp();
+          Serial.println(adcVal);
           for (int i = 0; i < nADC; i++){
             toBeEncoded[i] = (uint8_t)((adcVal >> (8*(nADC-1-i))) & 0xFF);
           }

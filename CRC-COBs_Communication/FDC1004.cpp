@@ -150,7 +150,7 @@ uint32_t FDC1004::getRawData(uint8_t measurement, uint8_t rate)
   trigger_data |= (1 << (8 - measurement));
   writeRegister16(FDC1004_CONFIG, trigger_data);
 
-  //  delay(15); //wait for data conversion. THIS WAS THE ORIGINAL WAIT TIME
+  // delay(15); //wait for data conversion. THIS WAS THE ORIGINAL WAIT TIME
   while (!(readRegister16(FDC1004_CONFIG) & (1 << (4 - measurement)))) continue; // Wait until DONE_X is 1. // Added by Jose Guillermo Colli Alfaro on 2025-07-30
 
 
@@ -204,20 +204,20 @@ float FDC1004::getCapacitance(uint8_t measurement, uint8_t rate)
 // int32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
 uint32_t FDC1004::getRawCapacitance(uint8_t measurement, uint8_t rate)
 {
-  int32_t data;
+  // int32_t data;
   uint32_t rawdata = getRawData(measurement, rate);
 
   rawdata = (rawdata & 0xFFFFFF); //make sure it is only 24 bit data
 
-  //convert from 2's complement to binary
-  if ((rawdata & 0x800000) > 0)
-  {
-    data = (int32_t)(rawdata | 0xFF000000);
-  }
-  else
-  {
-    data = (int32_t)rawdata;
-  }
+  // //convert from 2's complement to binary
+  // if ((rawdata & 0x800000) > 0)
+  // {
+  //   data = (int32_t)(rawdata | 0xFF000000);
+  // }
+  // else
+  // {
+  //   data = (int32_t)rawdata;
+  // }
 
   // return data;
   return rawdata;
