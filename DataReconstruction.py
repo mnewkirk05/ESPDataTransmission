@@ -18,16 +18,16 @@ CAPDAC = 9.5
 CAPDAC = max(0, min(31, CAPDAC)) 
 
 # Serial port variables:
-port = "COM6"
+port = "COM7"
 baudRate_serial = 115200  # Measure of data speed
 timeout_serial = 2  # in seconds  # Number of seconds to wait for serial data
 
 # Sensor dependent variables
-data_length = 13 # timestamp bytes + adc bytes + cap sensing bytes
+data_length = 11 # timestamp bytes(5) + adc bytes(2) + cap sensing bytes(4)
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "power test4"
+DataFileName = "Testing Everything"
 
 
 
@@ -182,6 +182,7 @@ if __name__ == "__main__":
     try:
         # If a port is specified, the serial connection opens automatically
         serialPort = serial.Serial(port, baudrate=baudRate_serial, timeout=timeout_serial)
+        print("Connected serial port")
     except serial.SerialException:
         print("\nError (Serial Communication): Check the communication port \n")
         sys.exit(1)  # Exit the program if the serial connection fails
@@ -191,12 +192,15 @@ if __name__ == "__main__":
     serialPort.reset_input_buffer()
     
     # wait for the first start byte to beginning running the program
+    serialPort.write(b's') 
     while (running==0):
+        
         if serialPort.read(1) == b'\x00':
+            print("Received start byte")
             running = 1 #if 0 is not read, don't start data collection
 
             # Have the esp32 begin sending data and initialize the buffer array
-            serialPort.write(b's') 
+            
             buf = bytearray() 
             print("Beginning data collection...")
 
@@ -220,6 +224,8 @@ if __name__ == "__main__":
         decode_length, valid = decode(packet,len(packet), decodeData) #pass in encoded_length as the length to be decoded and the function should return the original data length + 2 (includes crc)
         # data was corrupt if the crc values do not match, or the decoded length is not equal to the data length sent
         if (not valid) or (decode_length!=(data_length+2)): # need to account for the crc value that has not yet been removed 
+            print("BAD ")
+            print("Valid=",valid, "Decode length=",decode_length, "Data length=",data_length)
             decoded_data.append(np.nan) 
             esp32_timestamp_bytes.append(np.nan)
             capData_list.append(np.nan)
@@ -231,13 +237,13 @@ if __name__ == "__main__":
             esp32_timestamp_bytes.append(timestamp)
 
             #convert the adc data bytes
-            sensor_data_raw = int.from_bytes(payload[5:9], 'big') #the sensor data will be the 4 bytes after the 5 timestamp bytes 
+            sensor_data_raw = int.from_bytes(payload[5:7], 'big') #the sensor data will be the 4 bytes after the 5 timestamp bytes 
             sensor_data = (sensor_data_raw*3.3)/(2**sensor_resolution)
             decoded_data.append(sensor_data)
 
             #covert the capcitive data bytes
             # Formula from FDC1004 datasheet (page 17), using big-endian byte order as that is the format from the ESP32
-            capData_raw = int.from_bytes(payload[9:13], 'big', signed=True) #the capacitive sensor data will be the 4 bytes after the adc data
+            capData_raw = int.from_bytes(payload[7:11], 'big', signed=True) #the capacitive sensor data will be the 4 bytes after the adc data
             capData = (capData_raw / 524288.0) + (CAPDAC * 3.125)
             capData_list.append(capData)
 

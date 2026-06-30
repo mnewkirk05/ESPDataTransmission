@@ -153,6 +153,7 @@ uint32_t FDC1004::getRawData(uint8_t measurement, uint8_t rate)
   //  delay(15); //wait for data conversion. THIS WAS THE ORIGINAL WAIT TIME
   while (!(readRegister16(FDC1004_CONFIG) & (1 << (4 - measurement)))) continue; // Wait until DONE_X is 1. // Added by Jose Guillermo Colli Alfaro on 2025-07-30
 
+
   uint16_t msb = readRegister16(FDC1004_MEAS1_MSB + 2 * (measurement - 1));
   uint16_t lsb = readRegister16(FDC1004_MEAS1_LSB + 2 * (measurement - 1));
   // Serial.println(msb, BIN);
