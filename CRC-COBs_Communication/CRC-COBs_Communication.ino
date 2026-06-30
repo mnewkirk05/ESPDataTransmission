@@ -11,16 +11,17 @@
 
 #define MAX_N 300
 #define MAX_SIZE (MAX_N + MAX_N/254+2)
+#define NUM_SENSORS 3
 
 int receivedLength = 0; 
 uint8_t receivedData[MAX_SIZE];
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 10; // in milliseconds
+int sampleTime = 12; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
-const int cPotPin = 25; // pin attached to the potentiometer for sample sensor data
+const int adcReset = 2; // adc reset pin on the esp
 uint16_t adcVal = 0; // value read from the potentiometer    
 int timestampBytes = 5; // number of bytes of the timestamp that will be used
 int nADC = 2; //bytes 
@@ -30,11 +31,16 @@ uint8_t toBeEncoded[11]; // **Need to manually input length = to_encode_length**
 bool ready = false;
 
 //settings to configure capcitor measurement channel
-uint8_t measurement = 1;    //must be 1,2,3,or 4
-uint8_t sensor = 1;         //must be 1,2,3,or 4
-uint8_t rate = 2;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
-int32_t cap_sens_data;
+uint8_t rate = 3;           //1 = 100 Hz, 2 = 200 Hz, 3 = 400 Hz Lower sample rate the higher the resolution
 volatile int capdac = 9.5;
+uint8_t measurements[NUM_SENSORS] = {1,2,3};
+uint8_t sensors[NUM_SENSORS] = {1,2,3};
+uint8_t capdacs[NUM_SENSORS] = {capdac,capdac,capdac};
+
+uint8_t measurements_flag = 0b1110; //set bit for each of the sensors [1][2][3][4]
+
+uint32_t capacitance[3];
+int32_t capToSend;
 
 // -----------------------------------------------------------------------------------------------------------
 // Object to access library functions
@@ -47,7 +53,7 @@ gptimer_handle_t gptimer = NULL;
 volatile int samplesReady = 0; //tells program to take a sample of data and send it
 
 bool IRAM_ATTR gptimer_callback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data){
-  samplesReady++;
+  samplesReady = 1;
   return true;
 }
 
@@ -82,7 +88,7 @@ void hardware_timer_setup(uint time_in_us){
 
   // step 4: enable and start the timer
   ESP_ERROR_CHECK(gptimer_enable(gptimer));
-  ESP_ERROR_CHECK(gptimer_start(gptimer));
+  // ESP_ERROR_CHECK(gptimer_start(gptimer));
 }
 
 // states of the sensor
@@ -96,13 +102,19 @@ enum state {
 enum state currentState = idle;
 
 void setup() {
-  // pinMode(cPotPin, INPUT);
-
-  pinMode(2, OUTPUT);
-  digitalWrite(2, LOW);
+  pinMode(adcReset, OUTPUT);
+  digitalWrite(adcReset, LOW);
 
   Wire.begin();
-  myFDC1004.setupSingleMeasurement(measurement, sensor, capdac);
+  
+  //set up all four sensors for single measurement mode
+  for(int i=0; i < NUM_SENSORS; i++)
+  {
+    myFDC1004.setupSingleMeasurement(measurements[i], sensors[i], capdacs[i]);
+    
+  }
+  //start repeatedly measured all four measuremens at given rate
+  myFDC1004.startRepeatMeasurement(measurements_flag, rate);
   
   // set up adc
   bank.setChannelSPD(0b00000001);       // set the channels to be read from 1 = read, 0 = power down
@@ -111,9 +123,7 @@ void setup() {
   
 
   Serial.begin(115200);
-  bank.noOp();
-  bank.noOp();
-  // Serial.println("Ready to start");
+  // bank.noOp();
   while (Serial.available() > 0) { //clear buffer
     Serial.read();
   }
@@ -121,23 +131,28 @@ void setup() {
 
   // set up timer
   hardware_timer_setup(sampleTime*1000); //sample time initially entered in ms
+  // gptimer_stop(gptimer);
 
-  // need to send the first start bit since all other start bits will be the end bit of the previous package
-  Serial.write(0x00);
 }
 
+
 void loop() {
-  // currentState = debug; // use if wanting to test the arudino code alone, without python communication
+  // currentState = send; // use if wanting to test the arudino code alone, without python communication
 
   if (Serial.available() > 0){
     char signal = Serial.read();
 
     if (signal == 's'){ // when s (start) is sent from python, start sending data
-      // Serial.write(0x00);
       currentState = send;
+        // need to send the first start bit since all other start bits will be the end bit of the previous package
+        Serial.write(0x00);
+        ESP_ERROR_CHECK(gptimer_start(gptimer));
+        // gptimer_set_raw_count(gptimer, 0);
     }
     else{ // go to idle when python wants to end data transmission and the esp32 needs to stop sending data
       currentState = idle;
+      ESP_ERROR_CHECK(gptimer_stop(gptimer));
+      
     }
   }
   switch(currentState){
@@ -145,23 +160,19 @@ void loop() {
         break;
 
       case send:
-        // Serial.write(0x00); //if here gets sent everytime the package starts and does not get encoded, so nothing is recorded by python
-
         if (samplesReady> 0){//get data based on the desired sampling time
           samplesReady = 0; // set back to zero, ***might end up skipping data if samplesReady > 1, but should received data at the appropriate time for the next sample
-
+          
           // get the timestamp and sensor value
           adc_timestamp = esp_timer_get_time(); // 8 bytes, only using 5
-          // adcVal = analogRead(cPotPin); // 4 bytes
+          // gptimer_get_raw_count(gptimer, &adc_timestamp);
           adcVal = bank.noOp(); // 2 bytes
 
-          cap_sens_data = myFDC1004.getRawCapacitance(measurement, rate);
-          // if (cap_sens_data !=0xFFFFFFFF){
-          //   ready = true;
-          // }
-          // Serial.println(cap_sens_data);
-          // delay(1000);
-          // if (ready){
+          // store the repeat data
+          myFDC1004.getRepeatRawData(measurements_flag, capacitance);
+          //make into a loop when reading from more channels
+          capToSend = capacitance[0]; 
+
           // fill the array to be encoded with the timestamp and data --> need to shift the information to the appropriate position in the array
           for (int i=0; i<timestampBytes; i++){
             toBeEncoded[i] = (uint8_t)((adc_timestamp >> (8*(timestampBytes-1-i))) & 0xFF); 
@@ -174,7 +185,7 @@ void loop() {
 
           // fill the rest of the array with the capcitive sensing data, starting where the ADC data ends
           for (int i = 0; i < nCap; i++){
-            toBeEncoded[timestampBytes+nADC+i] = (uint8_t)((cap_sens_data >> (8*(nCap-1-i))) & 0xFF);
+            toBeEncoded[timestampBytes+nADC+i] = (uint8_t)((capToSend >> (8*(nCap-1-i))) & 0xFF);
           }
 
           // TEST TO SEE WHAT WILL BE ENCODED
@@ -192,7 +203,7 @@ void loop() {
           for (int i = 0; i<encoded_length; i++){
             Serial.write(encodeCobs[i]); // send the encoded array to python one byte at a time
           }
-        // }
+
         }
         break;
       case debug:

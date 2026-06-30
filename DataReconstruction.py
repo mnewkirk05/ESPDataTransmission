@@ -27,7 +27,7 @@ data_length = 11 # timestamp bytes(5) + adc bytes(2) + cap sensing bytes(4)
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "Testing Everything"
+DataFileName = "Fixing Timer"
 
 
 

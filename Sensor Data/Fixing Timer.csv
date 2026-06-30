@@ -1,0 +1,5 @@
+Sensor Sample rate (Hz):,100.0,,
+,,,
+Sample No.,Timestamp (us),Sensor Voltage from Potentiometer (V),Capacitive Sensor Reading (pF)
+1,0,0.0,61.68749809265137
+2,900120,0.0,61.68749809265137

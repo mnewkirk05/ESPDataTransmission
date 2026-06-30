@@ -243,6 +243,7 @@ uint8_t FDC1004::startRepeatMeasurement(uint8_t measurements, uint8_t rate)
   return 0;
 }
 
+// modified by Meghan Newkirk, June 30/26
 uint8_t FDC1004::getRepeatRawData(uint8_t measurements, uint32_t * value)
 {
   uint32_t data;
@@ -263,7 +264,7 @@ uint8_t FDC1004::getRepeatRawData(uint8_t measurements, uint32_t * value)
     msb = readRegister16(FDC1004_MEAS1_MSB);
     lsb = readRegister16(FDC1004_MEAS1_LSB);
     data = ((msb << 16) | lsb) >> 8;
-    value[idx] = data;
+    value[idx] = (data & 0xFFFFFF); // mask added
     idx += 1;
   }
   if ((measurements & 4) > 0)
@@ -271,7 +272,7 @@ uint8_t FDC1004::getRepeatRawData(uint8_t measurements, uint32_t * value)
     msb = readRegister16(FDC1004_MEAS2_MSB);
     lsb = readRegister16(FDC1004_MEAS2_LSB);
     data = ((msb << 16) | lsb) >> 8;
-    value[idx] = data;
+    value[idx] = (data & 0xFFFFFF); // mask added
     idx += 1;
   }
   if ((measurements & 2) > 0)
@@ -279,7 +280,7 @@ uint8_t FDC1004::getRepeatRawData(uint8_t measurements, uint32_t * value)
     msb = readRegister16(FDC1004_MEAS3_MSB);
     lsb = readRegister16(FDC1004_MEAS3_LSB);
     data = ((msb << 16) | lsb) >> 8;
-    value[idx] = data;
+    value[idx] = (data & 0xFFFFFF); // mask added
     idx += 1;
   }
   if ((measurements & 1) > 0)
@@ -287,9 +288,12 @@ uint8_t FDC1004::getRepeatRawData(uint8_t measurements, uint32_t * value)
     msb = readRegister16(FDC1004_MEAS4_MSB);
     lsb = readRegister16(FDC1004_MEAS4_LSB);
     data = ((msb << 16) | lsb) >> 8;
-    value[idx] = data;
+    value[idx] = (data & 0xFFFFFF); // mask added
     idx += 1;
   }
+
+
+  
   return 0;
 
 }
@@ -354,6 +358,8 @@ uint8_t FDC1004::getRepeatCapacitance(uint8_t measurements, float * capacitance)
 
   return 0;
 }
+
+
 
 //convert 24-bit number in 2's complement to decimal value
 float FDC1004::convert2Decimal24(uint32_t rawdata)
