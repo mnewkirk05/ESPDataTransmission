@@ -18,7 +18,7 @@ uint8_t receivedData[MAX_SIZE];
 
 int currentTime;
 int lastTime = 0;
-int sampleTime = 10; // in milliseconds
+int sampleTime = 1000; // in milliseconds
 uint64_t adc_timestamp; // going to read 64 bits but only use 40
 
 const int adcReset = 2; // adc reset pin on the esp
@@ -104,8 +104,12 @@ enum state {
 enum state currentState = idle;
 
 void setup() {
-  pinMode(adcReset, OUTPUT);
-  digitalWrite(adcReset, LOW);
+  // pinMode(adcReset, OUTPUT);
+  // digitalWrite(adcReset, LOW);
+
+  // digitalWrite(adcReset, HIGH);
+
+  pinMode(adcReset,INPUT_PULLUP);
 
   Wire.begin();
   
@@ -120,9 +124,9 @@ void setup() {
 
   myFDC1004.setupSingleMeasurement(measurement, sensor, capdac);
   
-  // set up adc
-  bank.setChannelSPD(0b00000001);       // set the channels to be read from 1 = read, 0 = power down
+  // set up adc  
   bank.setGlobalRange(R1);              // set range for all channels R1 = 1.25*Vref= 1.25*4.096 = +- 5.12 V --> refer to datasheet for different ranges
+  bank.setChannelSPD(0b00000100);       // set the channels to be read from 1 = read, 0 = power down
   bank.autoRst();                       // reset auto sequence
   
 
@@ -217,15 +221,31 @@ void loop() {
         if (samplesReady){//get data based on the desired sampling time
           samplesReady=false;
           adcVal = bank.noOp();
-          Serial.println(adcVal);
-          for (int i = 0; i < nADC; i++){
-            toBeEncoded[i] = (uint8_t)((adcVal >> (8*(nADC-1-i))) & 0xFF);
-          }
-          for (int i = 0; i < nADC; i++){
-            Serial.print(toBeEncoded[i]);
-            Serial.print(" ");
-          }
-          Serial.println();
+          // Serial.println(bank.I2V(adcVal,R2), 4);
+          Serial.print("Raw: 0x");
+          Serial.print(adcVal, HEX);
+          Serial.print("  V=");
+          Serial.println(bank.I2V(adcVal, R1), 4);
+
+          // Serial.print("AUTO_SEQ_EN = 0x");
+          // Serial.println(bank.getChannelSequence(), HEX);
+          // Serial.print("CH_PWR_DN = 0x");
+          // Serial.println(bank.getChannelPowerDown(), HEX);
+          // Serial.print("Range CH2 = 0x");
+          // Serial.println(bank.getChannelRange(2), HEX);
+
+          // bank.setChannelSequence(0x55);
+          // Serial.println(bank.getChannelSequence(), HEX);
+          // bank.setChannelSequence(0xAA);
+          // Serial.println(bank.getChannelSequence(), HEX);
+        //   for (int i = 0; i < nADC; i++){
+        //     toBeEncoded[i] = (uint8_t)((adcVal >> (8*(nADC-1-i))) & 0xFF);
+        //   }
+        //   for (int i = 0; i < nADC; i++){
+        //     Serial.print(toBeEncoded[i]);
+        //     Serial.print(" ");
+        //   }
+        //   Serial.println();
         }
         break;
     }

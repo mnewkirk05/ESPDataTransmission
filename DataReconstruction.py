@@ -13,7 +13,7 @@ SAMPLING_PERIOD = 10e-3 #for a sampling period of 10ms, need to use rate 2 on th
 SAMPLING_RATE = 1/SAMPLING_PERIOD
 
 # ESP32 variables:
-CAPDAC = 9.5
+CAPDAC = 7
 # Ensure CAPDAC value is within the valid range [0, 31]
 CAPDAC = max(0, min(31, CAPDAC)) 
 
@@ -27,7 +27,7 @@ data_length = 11 # timestamp bytes(5) + adc bytes(2) + cap sensing bytes(4)
 encoded_length = data_length + 4 # data_length + OHB + CRC + end marker
 sensor_resolution = 12 # used to convert ADC value to a voltage
 
-DataFileName = "test both"
+DataFileName = "test"
 
 
 
